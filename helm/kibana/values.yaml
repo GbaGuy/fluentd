@@ -1,0 +1,11 @@
+replicaCount: 1
+image:
+  repository: docker.elastic.co/kibana/kibana
+  tag: "7.13.1"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 5601
+elasticsearch:
+  host: http://elasticsearch:9200
+resources: {}

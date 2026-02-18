@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "log-generator.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "log-generator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "log-generator.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "log-generator.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      # Wait until fluentd is available before starting (init container)
+      initContainers:
+        - name: wait-for-fluentd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              apk add -q --no-cache curl
+              echo "Waiting for Fluentd HTTP endpoint..."
+              until curl -sf "http://{{ .Values.fluentd.host }}:{{ .Values.fluentd.port }}/health" \
+                    >/dev/null 2>&1 || \
+                    curl -sf -X POST "http://{{ .Values.fluentd.host }}:{{ .Values.fluentd.port }}/app.probe" \
+                    -H "Content-Type: application/json" \
+                    -d '{"probe":"ready"}' >/dev/null 2>&1; do
+                echo "  fluentd not ready yet, retrying in 3s..."
+                sleep 3
+              done
+              echo "Fluentd is ready!"
+      containers:
+        - name: log-generator
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: FLUENTD_HOST
+              value: {{ .Values.fluentd.host | quote }}
+            - name: FLUENTD_PORT
+              value: {{ .Values.fluentd.port | quote }}
+            - name: INTERVAL
+              value: {{ .Values.interval | quote }}
+            - name: LOG_TAG
+              value: {{ .Values.logTag | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              apk add -q --no-cache curl
+
+              FLUENTD_URL="http://${FLUENTD_HOST}:${FLUENTD_PORT}"
+
+              # 10 rotating messages; levels: INFO(x6) WARN(x2) ERROR(x2)
+              LOG_MESSAGES="User authentication successful|Processing HTTP request to /api/data|Cache miss - fetching from origin server|Database query completed in 45ms|Background job enqueued successfully|Health check passed|Rate limit exceeded - request throttled|Connection pool exhausted, backing off|Authentication failed - invalid credentials|Service dependency timeout"
+              LOG_LEVELS="INFO|INFO|WARN|INFO|INFO|INFO|WARN|ERROR|ERROR|ERROR"
+
+              i=0
+              echo "[log-generator] starting on pod ${HOSTNAME}, posting to ${FLUENTD_URL}/${LOG_TAG}"
+
+              while true; do
+                IDX=$(( (i % 10) + 1 ))
+                LEVEL=$(echo "${LOG_LEVELS}"   | cut -d'|' -f${IDX})
+                MSG=$(echo "${LOG_MESSAGES}" | cut -d'|' -f${IDX})
+                TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+                PAYLOAD="{\"timestamp\":\"${TS}\",\"level\":\"${LEVEL}\",\"message\":\"${MSG}\",\"pod\":\"${HOSTNAME}\",\"seq\":${i}}"
+
+                # POST to fluentd HTTP input; suppress output, tolerate transient errors
+                curl -sf -X POST "${FLUENTD_URL}/${LOG_TAG}" \
+                  -H "Content-Type: application/json" \
+                  -d "${PAYLOAD}" >/dev/null 2>&1 \
+                  && echo "[${TS}] [${LEVEL}] seq=${i} pod=${HOSTNAME} → ${MSG}" \
+                  || echo "[${TS}] [WARN] failed to post seq=${i} to fluentd (will retry)"
+
+                i=$(( i + 1 ))
+                sleep "${INTERVAL}"
+              done
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "50m"
+              memory: "64Mi"

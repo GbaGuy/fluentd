@@ -1,0 +1,8 @@
+apiVersion: v2
+name: log-generator
+description: >
+  Generates synthetic log messages and ships them to Fluentd via the HTTP
+  input plugin. Runs as multiple replicas so several independent streams are
+  produced simultaneously.
+type: application
+version: 0.1.0

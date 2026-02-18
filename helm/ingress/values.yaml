@@ -1,0 +1,21 @@
+# Ingress class used by the nginx controller
+ingressClassName: nginx
+
+kibana:
+  enabled: true
+  host: kibana.k8s
+  serviceName: kibana
+  servicePort: 5601
+
+httpd:
+  enabled: true
+  host: httpd.k8s
+  serviceName: httpd
+  servicePort: 80
+
+elasticsearch:
+  # Disabled by default – exposes ES on the cluster; enable only in dev
+  enabled: false
+  host: elasticsearch.k8s
+  serviceName: elasticsearch
+  servicePort: 9200

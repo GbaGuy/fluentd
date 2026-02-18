@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "fluentd.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "fluentd.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fluentd.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "fluentd.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: fluentd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: forward
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            - name: http-input
+              containerPort: {{ .Values.service.httpPort }}
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /fluentd/etc/fluent.conf
+              subPath: fluent.conf
+            - name: logs
+              mountPath: /fluentd/log
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "fluentd.fullname" . }}-config
+        - name: logs
+          emptyDir: {}

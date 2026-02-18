@@ -1,0 +1,6 @@
+apiVersion: v2
+name: httpd
+description: A simple HTTPD deployment chart (converted from docker-compose)
+type: application
+version: 0.1.0
+appVersion: "2.4"

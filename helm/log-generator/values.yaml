@@ -1,0 +1,17 @@
+# Number of independent log-generator pods (each pod = one log stream)
+replicaCount: 3
+
+image:
+  repository: alpine
+  tag: "3.19"
+  pullPolicy: IfNotPresent
+
+fluentd:
+  host: fluentd
+  port: 9880
+
+# Seconds between log posts
+interval: "2"
+
+# Tag posted to Fluentd HTTP endpoint (becomes the Elasticsearch index prefix)
+logTag: "app.logs"
