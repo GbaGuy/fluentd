@@ -178,7 +178,16 @@ install_ingress_controller() {
   info "Checking nginx ingress controller..."
 
   if _ingress_controller_exists; then
-    ok "nginx ingress controller is already installed – skipping install"
+    info "nginx ingress controller already installed – ensuring hostPort is enabled..."
+    helm upgrade ingress-nginx ingress-nginx/ingress-nginx \
+      --namespace ingress-nginx \
+      --reuse-values \
+      --set controller.hostPort.enabled=true \
+      --set controller.hostPort.ports.http=80 \
+      --set controller.hostPort.ports.https=443 \
+      --timeout 3m \
+      --wait 2>&1 | tail -3 || true
+    ok "nginx ingress controller ready"
     return 0
   fi
 
@@ -190,6 +199,9 @@ install_ingress_controller() {
   helm install "$HN" ingress-nginx/ingress-nginx \
     --namespace ingress-nginx --create-namespace \
     --set controller.service.type=NodePort \
+    --set controller.hostPort.enabled=true \
+    --set controller.hostPort.ports.http=80 \
+    --set controller.hostPort.ports.https=443 \
     --timeout 5m \
     --wait
   ok "nginx ingress controller ready"
@@ -364,11 +376,7 @@ run_tests() {
     warn "/etc/hosts does not contain 'kibana.k8s'."
     warn "Add the following line to access Kibana via the Ingress:"
     warn "  ${node_ip}  kibana.k8s httpd.k8s"
-    if [[ -n "$node_port" ]]; then
-      warn "Then open: http://kibana.k8s:${node_port}"
-    else
-      warn "Then open: http://kibana.k8s"
-    fi
+    warn "Then open: http://kibana.k8s"
   fi
 }
 
@@ -395,8 +403,8 @@ print_summary() {
 
   echo ""
   info "Access URLs (requires /etc/hosts or DNS):"
-  echo "  Kibana  → http://kibana.k8s:${node_port}   (Ingress)"
-  echo "  httpd   → http://httpd.k8s:${node_port}    (Ingress)"
+  echo "  Kibana  → http://kibana.k8s   (Ingress)"
+  echo "  httpd   → http://httpd.k8s    (Ingress)"
   echo ""
   info "Quick /etc/hosts entry:"
   echo "  ${node_ip}  kibana.k8s httpd.k8s"
